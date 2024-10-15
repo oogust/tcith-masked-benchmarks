@@ -1,0 +1,169 @@
+//  main.c
+//  Markku-Juhani O. Saarinen <mjos@iki.fi>.  See LICENSE.
+
+//  === testing main()
+
+#include <string.h>
+#include "sloth_hal.h"
+#include "api.h"
+
+#define IN_LEN 32
+#define OUT_LEN 32
+
+#define NSAMPLES 1
+
+#ifndef hexdump
+#define hexdump(v, len, prefix) do {\
+    unsigned int _i_;\
+    if(prefix != NULL){\
+        printf("%s: ", prefix);\
+    }\
+    for(_i_ = 0; _i_ < len; _i_++){\
+        printf("%02x", (unsigned char)((v)[_i_]));\
+    }\
+    printf("\n");\
+} while(0);
+#endif
+
+
+const char main_hello[] =
+"\n[RESET]"
+"\t   ______        __  __ __\n"
+"\t  / __/ /  ___  / /_/ // /  SLotH Accelerator Test 2024/05\n"
+"\t _\\ \\/ /__/ _ \\/ __/ _  /   SLH-DSA / FIPS 205 ipd\n"
+"\t/___/____/\\___/\\__/_//_/    markku-juhani.saarinen@tuni.fi\n\n";
+
+//  unit tests
+int test_sloth();       //  test_sloth.c
+int test_bench();       //  test_bench.c
+int test_leak();        //  test_leak.c
+
+#ifdef _PICOLIBC__
+// XXX In case of Picolibc, redirect stdio related stuff to uart
+// (see https://github.com/picolibc/picolibc/blob/main/doc/os.md)
+// This allows to use printf family of functions
+#include <stdio.h>
+#include <stdlib.h>
+static int sample_putc(char c, FILE *file)
+{
+        (void) file;            /* Not used in this function */
+        sio_putc(c);            /* Defined by underlying system */
+        return c;
+}
+
+static int sample_getc(FILE *file)
+{
+        unsigned char c;
+        (void) file;            /* Not used in this function */
+        c = sio_getc();         /* Defined by underlying system */
+        return c;
+}
+
+FILE __stdio = FDEV_SETUP_STREAM(sample_putc,
+                                        sample_getc,
+                                        NULL,
+                                        _FDEV_SETUP_RW);
+
+FILE *const stdin = &__stdio; __strong_reference(stdin, stdout); __strong_reference(stdin, stderr);
+#endif
+
+unsigned char rr[] = {
+0x67, 0xc6, 0x69, 0x73, 0x51, 0xff, 0x4a, 0xec, 0x29, 0xcd, 0xba, 0xab, 0xf2, 0xfb, 0xe3, 0x46
+};
+int randombytes(unsigned char* x, unsigned long long xlen) {
+printf("===> Here %lld\n", xlen);
+memcpy(x, rr, 16);
+/*
+    for(unsigned long long j=0; j<xlen; j++){
+        x[j] = (uint8_t) rand();
+    }
+*/
+    return 0;
+}
+
+int main()
+{
+    uint32_t res_xof[1024] = { 0 };
+    uint32_t res_hash[1024] = { 0 };
+    uint32_t start, stop;
+    uint32_t inlen = 32;
+    uint32_t outlen = 30;
+    uint8_t digest1[1024] = { 0 };
+    unsigned char seed[1024] = { "a" };
+    //xof_context ctx[1024];
+    //for (inlen = 1; inlen < 1024; inlen++) {
+    
+    for(outlen = 1; outlen < 256; outlen+=1) {
+        uint32_t sum = 0;
+        xof_context ctx1;// = ctx[outlen];
+        printf("[+] CRX tests, %ld\n", outlen);
+        
+        start = get_clk_ticks();
+        xof_init(&ctx1);
+        stop = get_clk_ticks();
+        printf(" [1] ==> xof_init_SHAKE128 %ld:\n", stop-start);
+        //sum += stop - start;
+        sum = 436;
+
+        start = get_clk_ticks();
+        xof_update(&ctx1, seed, inlen);
+        stop = get_clk_ticks();
+        printf(" [1] ==> xof_update: %ld\n", stop-start);
+        sum += stop - start;
+
+        start = get_clk_ticks();
+        xof_final(&ctx1);
+        stop = get_clk_ticks();
+        printf(" [1] ==> xof_final: %ld\n", stop-start);
+        sum += stop - start;
+        
+
+        start = get_clk_ticks();
+        xof_squeeze(&ctx1, &digest1[0], outlen);
+        stop = get_clk_ticks();
+        printf(" [1] ==> xof_squeeze: %ld\n", stop-start);
+        sum += stop - start;
+        res_xof[outlen] = sum;
+    }
+    for(outlen = 1; outlen < 256; outlen+=1) {
+        printf("%ld:%ld,\n", outlen, res_xof[outlen]);
+    }
+    
+    /*
+    for (inlen = 270; inlen < 280; inlen+=1) {
+        printf("[+] CRX tests , %ld\n", inlen);
+
+    uint32_t sum = 0;
+    uint8_t digest1[32] = { 0 };
+    hash_context ctx1;
+
+    start = get_clk_ticks();
+    hash_init(&ctx1);
+    stop = get_clk_ticks();
+    printf(" [1] ==> hash_init_SHA3_256 %ld:\n", stop-start);
+    sum += stop - start;
+
+    start = get_clk_ticks();
+    hash_update(&ctx1, seed, inlen);
+    stop = get_clk_ticks();
+    printf(" [1] ==> hash_update: %ld\n", stop-start);
+    sum += stop - start;
+
+
+    start = get_clk_ticks();
+    hash_final(&ctx1, &digest1[0]);
+    stop = get_clk_ticks();
+    printf(" [1] ==> hash_final: %ld\n", stop-start);
+    sum += stop - start;
+    
+    res_hash[inlen] = sum;
+    
+    //hexdump(&digest1[0], 32, "d1");
+    }
+    for(inlen = 270; inlen < 280; inlen+=1) {
+        printf("%ld:%ld,\n", inlen, res_hash[inlen]);
+    }
+    */
+    exit(0);
+}
+

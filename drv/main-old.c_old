@@ -1,0 +1,472 @@
+//  main.c
+//  Markku-Juhani O. Saarinen <mjos@iki.fi>.  See LICENSE.
+
+//  === testing main()
+
+#include <string.h>
+#include "sloth_hal.h"
+#include "api.h"
+
+#define IN_LEN 32
+#define OUT_LEN 32
+
+#define NSAMPLES 1
+
+#ifndef hexdump
+#define hexdump(v, len, prefix) do {\
+    unsigned int _i_;\
+    if(prefix != NULL){\
+        printf("%s: ", prefix);\
+    }\
+    for(_i_ = 0; _i_ < len; _i_++){\
+        printf("%02x", (unsigned char)((v)[_i_]));\
+    }\
+    printf("\n");\
+} while(0);
+#endif
+
+
+const char main_hello[] =
+"\n[RESET]"
+"\t   ______        __  __ __\n"
+"\t  / __/ /  ___  / /_/ // /  SLotH Accelerator Test 2024/05\n"
+"\t _\\ \\/ /__/ _ \\/ __/ _  /   SLH-DSA / FIPS 205 ipd\n"
+"\t/___/____/\\___/\\__/_//_/    markku-juhani.saarinen@tuni.fi\n\n";
+
+//  unit tests
+int test_sloth();       //  test_sloth.c
+int test_bench();       //  test_bench.c
+int test_leak();        //  test_leak.c
+
+#ifdef _PICOLIBC__
+// XXX In case of Picolibc, redirect stdio related stuff to uart
+// (see https://github.com/picolibc/picolibc/blob/main/doc/os.md)
+// This allows to use printf family of functions
+#include <stdio.h>
+#include <stdlib.h>
+static int sample_putc(char c, FILE *file)
+{
+        (void) file;            /* Not used in this function */
+        sio_putc(c);            /* Defined by underlying system */
+        return c;
+}
+
+static int sample_getc(FILE *file)
+{
+        unsigned char c;
+        (void) file;            /* Not used in this function */
+        c = sio_getc();         /* Defined by underlying system */
+        return c;
+}
+
+FILE __stdio = FDEV_SETUP_STREAM(sample_putc,
+                                        sample_getc,
+                                        NULL,
+                                        _FDEV_SETUP_RW);
+
+FILE *const stdin = &__stdio; __strong_reference(stdin, stdout); __strong_reference(stdin, stderr);
+#endif
+
+unsigned char rr[] = {
+0x67, 0xc6, 0x69, 0x73, 0x51, 0xff, 0x4a, 0xec, 0x29, 0xcd, 0xba, 0xab, 0xf2, 0xfb, 0xe3, 0x46
+};
+int randombytes(unsigned char* x, unsigned long long xlen) {
+printf("===> Here %lld\n", xlen);
+memcpy(x, rr, 16);
+/*
+    for(unsigned long long j=0; j<xlen; j++){
+        x[j] = (uint8_t) rand();
+    }
+*/
+    return 0;
+}
+
+#if 1
+int main()
+{
+    uint32_t start, stop;
+
+    printf("[+] CRX tests\n");
+
+#if 0
+    int ret;
+    srand(0);
+
+    // Generate the keys
+    uint8_t pk[CRYPTO_PUBLICKEYBYTES] = { 0 };
+    uint8_t sk[CRYPTO_SECRETKEYBYTES] = { 0 };
+
+    start = get_clk_ticks();
+    ret = crypto_sign_keypair(pk, sk);
+    stop = get_clk_ticks();
+    printf(" ==> crypto_sign_keypair %ld\n", stop-start);
+    hexdump(pk, CRYPTO_PUBLICKEYBYTES, "pk");
+    hexdump(sk, CRYPTO_SECRETKEYBYTES, "sk");
+
+#if 1
+    // Select the message
+    #define MLEN 32
+    uint8_t m[MLEN] = {1, 2, 3, 4};
+    uint8_t m2[MLEN] = {0};
+    unsigned long long m2len = 0;
+
+    // Sign the message
+    uint8_t sm[MLEN+CRYPTO_BYTES];
+    unsigned long long smlen = 0;
+    start = get_clk_ticks();
+    ret = crypto_sign(sm, &smlen, m, MLEN, sk);
+    stop = get_clk_ticks();
+    printf(" ==> crypto_sign %ld\n", stop-start);
+    hexdump(sm, smlen, "sig");
+#endif
+
+#endif
+
+#if 0
+    uint8_t m[200] = { 0 };
+    memcpy(m, "abc\x06", 4);              //  pad: 0x1F=SHAKE, 0x06=SHA-3
+    m[200 - 2*32 - 1] = 0x80;             //  rate/capacity for 256
+
+
+    hexdump(m, 200, "m1");
+
+    crx_hw_keccak_f1600_m(&m, NULL, NULL);
+
+    hexdump(m, 200, "m2");
+#endif
+    
+#if 0
+    uint8_t digest1[32] = { 0 };
+    uint8_t digest2[32] = { 0 };
+    hash_context ctx1;
+    hash_context ctx2;
+
+    start = get_clk_ticks();
+    hash_init(&ctx1);
+    stop = get_clk_ticks();
+    printf(" [1] ==> hash_init_SHA3_256 %ld:\n", stop-start);
+
+    //start = get_clk_ticks();
+    //hash_init(&ctx2);
+    //stop = get_clk_ticks();
+    //printf(" [2] ==> hash_init_SHA3_256 %ld:\n", stop-start);
+
+
+    start = get_clk_ticks();
+    hash_update(&ctx1, (unsigned char*)"abcdefghijklmnop", 16);
+    stop = get_clk_ticks();
+    printf(" [1] ==> hash_update: %ld\n", stop-start);
+
+    //start = get_clk_ticks();
+    //hash_update(&ctx2, (unsigned char*)"abc", 3);
+    //stop = get_clk_ticks();
+    //printf(" [2] ==> hash_update: %ld\n", stop-start);
+    //start = get_clk_ticks();
+    //hash_update(&ctx2, (unsigned char*)"abcef", 5);
+    //stop = get_clk_ticks();
+    //printf(" [2] ==> hash_update: %ld\n", stop-start);
+
+    //start = get_clk_ticks();
+    //hash_final(&ctx2, &digest2[0]);
+    //stop = get_clk_ticks();
+    //printf(" [2] ==> hash_final: %ld\n", stop-start);
+ 
+    start = get_clk_ticks();
+    hash_final(&ctx1, &digest1[0]);
+    stop = get_clk_ticks();
+    printf(" [1] ==> hash_final: %ld\n", stop-start);
+    
+    hexdump(&digest1[0], 32, "d1");
+    //hexdump(&digest2[0], 32, "d2");
+
+#endif
+
+#if 0
+    #include <stdlib.h>
+    #include <stdio.h>
+    #include <stdint.h>
+    #include "util.h"
+    #include "rng.h"
+    #include "masking.h"
+
+    #include "../primitives/field-multiplication/mult.h"
+
+    uint8_t a, b, c;
+
+    uint8_t a_masked[NSHARES];
+    uint8_t b_masked[NSHARES];
+    uint8_t c_masked[NSHARES];
+    
+    printf("nshares=%d\n", NSHARES);
+
+    for(int i = 0; i < NSAMPLES; i++) {
+        a = 0x12;//rand8();
+        b = 0x1;//rand8();
+        c = 0xcb;
+
+        printf("a = %x\n", a);
+        printf("b = %x\n", b);
+
+        mask(a_masked, a);
+        mask(b_masked, b); 
+        
+        //unmask(a_masked, a);
+        //unmask(b_masked, b);
+
+        //printf("a = %x\n", a);
+        //printf("b = %x\n", b);
+        //printf("c = %x\n", c);
+
+        //print_vec(NSHARES, a_masked);
+        //start = get_clk_ticks();
+        //sec_mult(c_masked, a_masked, b_masked);
+        //c = a * b;
+        //PINI_sec_mult(c_masked, a_masked, b_masked);
+        //stop = get_clk_ticks();
+
+        //printf("PINI mult: %ld\n", stop-start);
+
+        start = get_clk_ticks();
+        PINI_sec_mult(c_masked, a_masked, b_masked); 
+        stop = get_clk_ticks();                        
+        printf("PINI mult: %ld\n", stop-start);
+        //print_vec(NSHARES, c_masked);
+        //printf("c = %x\n", c);
+        //unmask(c_masked, &c);
+        //printf("c = %x\n", c);
+    }
+
+
+#endif
+
+#if 0
+    #include <stdlib.h>
+    #include <stdio.h>
+    #include <stdint.h>
+    #include "util.h"
+    #include "rng.h"
+    #include "masking.h"
+
+    #include "../primitives/masked-keccak-saber-plain/fips202.h"
+    printf("nshares=%d\n", NSHARES);
+
+    uint8_t input[IN_LEN];
+    uint8_t output[OUT_LEN];
+
+    uint8_t input_masked[NSHARES * IN_LEN];
+    uint8_t output_masked[NSHARES * OUT_LEN];
+
+    rand_vec(IN_LEN, input);
+    mask_vec(IN_LEN, input_masked, input);
+
+    for(int i = 0; i < NSAMPLES; i++) {
+        size_t outlen = (size_t) OUT_LEN;
+        size_t inlen = (size_t) IN_LEN;
+        start = get_clk_ticks();
+        shake128_masked(output_masked, outlen, input_masked, inlen);
+        stop = get_clk_ticks();
+        printf("keccak-plain : %ld\n", stop-start);
+    }
+    unmask_vec(OUT_LEN, output_masked, output);
+
+    print_vec(IN_LEN, input);
+    unmask_vec(IN_LEN, input_masked, input);
+    print_vec(IN_LEN, input);
+
+    print_vec(OUT_LEN, output);
+
+#endif
+#if 0
+    #include <stdlib.h>
+    #include <stdio.h>
+    #include <stdint.h>
+    #include "util.h"
+    #include "rng.h"
+    #include "masking.h"
+    #include "../primitives/masked-keccak-saber-bitslice/masked_fips202.h"
+    
+    uint8_t input[IN_LEN];
+    uint8_t output[OUT_LEN];
+
+    uint8_t input_masked[NSHARES * IN_LEN];
+    uint8_t output_masked[NSHARES * OUT_LEN];
+    
+    rand_vec(IN_LEN, input);
+    mask_vec(IN_LEN, input_masked, input);
+
+    printf("%d\n", NSHARES);
+
+    for(int i = 0; i < NSAMPLES; i++) {
+        size_t outlen = (size_t) OUT_LEN;
+        size_t out_msk_stride = (size_t) OUT_LEN;
+        size_t out_data_stride = (size_t) 1;
+
+        size_t inlen = (size_t) IN_LEN;
+        size_t in_msk_stride = (size_t) OUT_LEN;
+        size_t in_data_stride = (size_t) 1;
+
+        start = get_clk_ticks();
+
+        masked_shake128(output_masked, outlen, out_msk_stride,
+            out_data_stride, input, inlen,
+            in_msk_stride, in_data_stride);
+        
+        stop = get_clk_ticks();
+        printf("keccak-bitslice : %ld\n", stop-start);
+    }
+    unmask_vec(OUT_LEN, output_masked, output);
+
+    print_vec(IN_LEN, input);
+    unmask_vec(IN_LEN, input_masked, input);
+    print_vec(IN_LEN, input);
+
+    print_vec(OUT_LEN, output);
+#endif
+
+#if 0
+
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of the GNU General Public License version 2 as published
+// by the Free Software Foundation.
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include <math.h>
+
+#include "../primitives/aes-coron/aes.h"
+#include "../primitives/aes-coron/aes_rp.h"
+#include "../primitives/aes-coron/share.h"
+#include "../primitives/aes-coron/aes_share.h"
+#include "../primitives/aes-coron/common.h"
+
+  int n;
+  int nt=1;
+  int i;
+  byte keyex[16]={0x2b,0x7e,0x15,0x16,0x28,0xae,0xd2,0xa6,0xab,0xf7,0x15,0x88,0x09,0xcf,0x4f,0x3c};
+
+  byte inex[16]={0x32,0x43,0xf6,0xa8,0x88,0x5a,0x30,0x8d,0x31,0x31,0x98,0xa2,0xe0,0x37,0x07,0x34};
+
+  byte outex[16]={0x39,0x25,0x84,0x1d,0x02,0xdc,0x09,0xfb,0xdc,0x11,0x85,0x97,0x19,0x6a,0x0b,0x32};
+
+  byte in[16],out[16];
+  byte key[16];
+
+  for(i=0;i<16;i++) key[i]=keyex[i];
+  for(i=0;i<16;i++) in[i]=inex[i];
+
+  int dt,base;
+
+  start = get_clk_ticks();
+  printf("Without countermeasure, plain: \n");
+  base=run_aes(&aes,in,out,key,outex,nt,0);
+  stop = get_clk_ticks();
+  printf("aes-rp : %ld\n", stop-start);
+
+  start = get_clk_ticks();
+  printf("Without countermeasure, RP: \n");
+  run_aes(&aes_rp,in,out,key,outex,nt,base);
+  stop = get_clk_ticks();
+  printf("aes-rp : %ld\n", stop-start);
+
+  for(n=16;n<=32;n+=16)
+  {
+    
+    printf("n=%d\n",n);
+    printf("  With RP countermeasure: \n");
+
+    start = get_clk_ticks();
+    run_aes_share(in,out,key,outex,n,&subbyte_rp_share,nt,base);
+    stop = get_clk_ticks();
+    printf("aes-rp : %ld\n", stop-start);
+    
+  }
+
+#endif
+#if 1
+
+    #include <stdlib.h>
+    #include <stdio.h>
+    #include <stdint.h>
+    #include "util.h"
+    #include "rng.h"
+    #include "masking.h"
+
+    printf("%d\n", NSHARES);
+    uint8_t a;
+    uint8_t a_masked[NSHARES*4];
+    a = rand8();
+    mask(a_masked, a);
+
+    for(int i = 1; i <= NSHARES; i++) {
+        start = get_clk_ticks();
+        quasiLinearRefresh(i, a_masked);
+        stop = get_clk_ticks();
+        printf("%ld:%ld,\n", i, stop-start);
+    }
+#endif
+
+    exit(0);
+}
+
+#else
+int main()
+{
+    int fail = 0;
+
+    sio_puts(main_hello);
+
+    sio_puts("[INFO]\t=== Basic health test ===\n");
+    fail += test_sloth();
+    sio_puts("\n[INFO]\t=== Testbench === \n");
+    fail += test_bench();
+    //fail += test_leak();
+
+    if (fail) {
+        sio_puts("[FAIL]\tSome tests failed.\n");
+    } else {
+        sio_puts("[PASS]\tAll tests ok.\n");
+    }
+
+    //  get input (test UART)
+#ifdef SLOTH
+    sio_puts("\nUART Test. Press x to exit.\n");
+    int ch, gpio, old_gpio;
+
+    ch = 0;
+    old_gpio = -1;
+
+    do {
+        gpio = get_gpio_in();
+        if (gpio != old_gpio) {
+            sio_puts("GPIO 0x");
+            sio_put_hex(gpio, 2);
+            sio_putc('\n');
+            old_gpio = gpio;
+        }
+
+        if (get_uart_rxok()) {
+            ch = get_uart_rx();
+            sio_puts("UART 0x");
+            sio_put_hex(ch, 2);
+            sio_putc(' ');
+            sio_putc(ch);
+            sio_putc('\n');
+        }
+
+    } while (ch != 'x');
+#endif
+    sio_putc('\n');
+    sio_putc(4);  //  translated to EOF
+    sio_putc(0);
+
+#ifdef _PICOLIBC__
+    // XXX: in case of picolibc, explicitly exit as
+    // this is not performed at the return of main
+    exit(0);
+#endif
+    return 0;
+}
+
+#endif
