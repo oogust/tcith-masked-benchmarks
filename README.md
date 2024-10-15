@@ -1,3 +1,11 @@
+#       Benchmarks for masked performance of the Threshold Computation in the Head signature scheme
+
+This repo (forked from https://github.com/slh-dsa/sloth.git) contains the source code of the primitives benchmarked in order to obtain performance estimations for masking the TCitH scheme. The primitives are benchmarked using the RISC-V architecture from (https://eprint.iacr.org/2024/367). To compile and run a benchmark example:   
+```
+make 
+make veri 
+```
+
 #       SLotH
 
 An accelerator / codesign for SLH-DSA ("Stateless Hash-Based Digital Signature Standard") as described in [FIPS 205 Initial Public Draft](https://doi.org/10.6028/NIST.FIPS.205.ipd) from August 2023.
@@ -33,6 +41,8 @@ sloth
 ├── drv             # Accelerator drivers and test code
 ├── kat             # SLH-DSA Known Answer Test data
 ├── flow            # Misc files for FPGA and ASIC flows
+├── mqom            # Implementation of the MQOM signature scheme
+├── primitives      # Benchmarked primitives for masked TCitH performance estimation
 ├── Makefile        # Convenience Makefile for the Accelerator
 ├── LICENSE
 └── README.md
